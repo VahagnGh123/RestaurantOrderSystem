@@ -80,10 +80,4 @@ Data is stored in text files under `data/`:
 
 Missing files are treated as empty data. Invalid lines are skipped so one bad line does not crash the whole program.
 
-## Presentation Help
 
-Use these files to prepare your demo:
-
-- `PRESENTATION_GUIDE.md`
-- `DEMO_SCRIPT.md`
-- `TEACHER_QA.md`
