@@ -1,0 +1,9 @@
+package model.order;
+
+public enum OrderStatus {
+    PENDING,
+    PREPARING,
+    READY,
+    SERVED,
+    CANCELLED
+}

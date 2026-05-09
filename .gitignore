@@ -1,0 +1,12 @@
+.idea/
+out/
+*.class
+*.iml
+
+DEMO_SCRIPT.md
+PRESENTATION_GUIDE.md
+PROJECT_CODE_EXPORT.md
+TEACHER_QA.md
+
+data/*.tmp
+data/*.bak
