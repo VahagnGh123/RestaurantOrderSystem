@@ -4,11 +4,11 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import model.MenuCategory;
 import model.MenuItem;
 import model.order.Order;
+import model.order.OrderItem;
 import model.order.OrderStatus;
 import model.payment.CardPayment;
 import model.payment.CashPayment;
@@ -61,14 +61,27 @@ public class RestaurantManager {
         if (isMenuItemUsedInOrders(id)) {
             throw new IllegalArgumentException("Cannot delete menu item because it is used in an order");
         }
-        boolean removed = menuItems.removeIf(item -> item.getId() == id);
+
+        boolean removed = false;
+        for (int i = menuItems.size() - 1; i >= 0; i--) {
+            if (menuItems.get(i).getId() == id) {
+                menuItems.remove(i);
+                removed = true;
+            }
+        }
+
         if (!removed) {
             throw new IllegalArgumentException("Menu item not found");
         }
     }
 
     public MenuItem findMenuItemById(int id) {
-        return menuItems.stream().filter(item -> item.getId() == id).findFirst().orElse(null);
+        for (MenuItem item : menuItems) {
+            if (item.getId() == id) {
+                return item;
+            }
+        }
+        return null;
     }
 
     public List<MenuItem> getAllMenuItems() {
@@ -76,7 +89,13 @@ public class RestaurantManager {
     }
 
     public List<MenuItem> getAvailableMenuItems() {
-        return menuItems.stream().filter(MenuItem::isAvailable).collect(Collectors.toList());
+        List<MenuItem> availableItems = new ArrayList<>();
+        for (MenuItem item : menuItems) {
+            if (item.isAvailable()) {
+                availableItems.add(item);
+            }
+        }
+        return availableItems;
     }
 
     public void applyDiscountToMenuItem(int itemId, double percent) {
@@ -100,6 +119,17 @@ public class RestaurantManager {
         requireMenuItem(itemId).setAvailable(available);
     }
 
+    private boolean isMenuItemUsedInOrders(int menuItemId) {
+        for (Order order : orders) {
+            for (OrderItem orderItem : order.getItems()) {
+                if (orderItem.getItem().getId() == menuItemId) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     public Order createOrder() {
         Order order = new Order(idGenerator.nextOrderId());
         orders.add(order);
@@ -107,7 +137,12 @@ public class RestaurantManager {
     }
 
     public Order findOrderById(int orderId) {
-        return orders.stream().filter(order -> order.getOrderId() == orderId).findFirst().orElse(null);
+        for (Order order : orders) {
+            if (order.getOrderId() == orderId) {
+                return order;
+            }
+        }
+        return null;
     }
 
     public List<Order> getAllOrders() {
@@ -118,7 +153,14 @@ public class RestaurantManager {
         if (status == null) {
             throw new IllegalArgumentException("Order status cannot be null");
         }
-        return orders.stream().filter(order -> order.getStatus() == status).count();
+
+        long count = 0;
+        for (Order order : orders) {
+            if (order.getStatus() == status) {
+                count++;
+            }
+        }
+        return count;
     }
 
     public void addItemToOrder(int orderId, int menuItemId, int quantity) {
@@ -166,18 +208,40 @@ public class RestaurantManager {
         if (isTableUsedInReservations(tableNumber)) {
             throw new IllegalArgumentException("Cannot delete table because it is used in a reservation");
         }
-        boolean removed = tables.removeIf(table -> table.getTableNumber() == tableNumber);
+
+        boolean removed = false;
+        for (int i = tables.size() - 1; i >= 0; i--) {
+            if (tables.get(i).getTableNumber() == tableNumber) {
+                tables.remove(i);
+                removed = true;
+            }
+        }
+
         if (!removed) {
             throw new IllegalArgumentException("Table not found");
         }
     }
 
     public Table findTableByNumber(int tableNumber) {
-        return tables.stream().filter(table -> table.getTableNumber() == tableNumber).findFirst().orElse(null);
+        for (Table table : tables) {
+            if (table.getTableNumber() == tableNumber) {
+                return table;
+            }
+        }
+        return null;
     }
 
     public List<Table> getAllTables() {
         return new ArrayList<>(tables);
+    }
+
+    private boolean isTableUsedInReservations(int tableNumber) {
+        for (Reservation reservation : reservations) {
+            if (reservation.getTable().getTableNumber() == tableNumber) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public Reservation createReservation(String customerName, int tableNumber,
@@ -193,10 +257,12 @@ public class RestaurantManager {
     }
 
     public Reservation findReservationById(int reservationId) {
-        return reservations.stream()
-                .filter(reservation -> reservation.getReservationId() == reservationId)
-                .findFirst()
-                .orElse(null);
+        for (Reservation reservation : reservations) {
+            if (reservation.getReservationId() == reservationId) {
+                return reservation;
+            }
+        }
+        return null;
     }
 
     public List<Reservation> getAllReservations() {
@@ -204,10 +270,14 @@ public class RestaurantManager {
     }
 
     public long countActiveReservations() {
-        return reservations.stream()
-                .filter(reservation -> reservation.getStatus() != ReservationStatus.CANCELLED)
-                .filter(reservation -> reservation.getStatus() != ReservationStatus.COMPLETED)
-                .count();
+        long count = 0;
+        for (Reservation reservation : reservations) {
+            if (reservation.getStatus() != ReservationStatus.CANCELLED
+                    && reservation.getStatus() != ReservationStatus.COMPLETED) {
+                count++;
+            }
+        }
+        return count;
     }
 
     public void confirmReservation(int reservationId) {
@@ -224,11 +294,42 @@ public class RestaurantManager {
 
     public boolean isTableAvailable(int tableNumber, LocalDateTime start, Duration duration) {
         requireTable(tableNumber);
-        return reservations.stream()
-                .filter(reservation -> reservation.getTable().getTableNumber() == tableNumber)
-                .filter(reservation -> reservation.getStatus() != ReservationStatus.CANCELLED)
-                .filter(reservation -> reservation.getStatus() != ReservationStatus.COMPLETED)
-                .noneMatch(reservation -> reservation.overlapsWith(start, duration));
+
+        for (Reservation reservation : reservations) {
+            boolean sameTable = reservation.getTable().getTableNumber() == tableNumber;
+            boolean activeReservation = reservation.getStatus() != ReservationStatus.CANCELLED
+                    && reservation.getStatus() != ReservationStatus.COMPLETED;
+
+            if (sameTable && activeReservation && reservation.overlapsWith(start, duration)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private boolean canLoadReservation(Reservation reservation) {
+        if (findReservationById(reservation.getReservationId()) != null) {
+            return false;
+        }
+        if (reservation.getStatus() == ReservationStatus.CANCELLED
+                || reservation.getStatus() == ReservationStatus.COMPLETED) {
+            return true;
+        }
+
+        for (Reservation existing : reservations) {
+            boolean sameTable = existing.getTable().getTableNumber()
+                    == reservation.getTable().getTableNumber();
+            boolean activeReservation = existing.getStatus() != ReservationStatus.CANCELLED
+                    && existing.getStatus() != ReservationStatus.COMPLETED;
+
+            if (sameTable && activeReservation
+                    && existing.overlapsWith(reservation.getStartDateTime(), reservation.getDuration())) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public CashPayment processCashPayment(int orderId, double cashReceived) {
@@ -248,11 +349,16 @@ public class RestaurantManager {
     }
 
     public double calculateSuccessfulPaymentIncome() {
-        return orders.stream()
-                .map(Order::getPayment)
-                .filter(payment -> payment != null && payment.getStatus() == PaymentStatus.SUCCESSFUL)
-                .mapToDouble(payment -> payment.getAmount())
-                .sum();
+        double income = 0;
+
+        for (Order order : orders) {
+            if (order.getPayment() != null
+                    && order.getPayment().getStatus() == PaymentStatus.SUCCESSFUL) {
+                income += order.getPayment().getAmount();
+            }
+        }
+
+        return income;
     }
 
     public void saveData() {
@@ -338,31 +444,5 @@ public class RestaurantManager {
             throw new IllegalArgumentException("Order already has a successful payment");
         }
         return order;
-    }
-
-    private boolean isMenuItemUsedInOrders(int menuItemId) {
-        return orders.stream()
-                .flatMap(order -> order.getItems().stream())
-                .anyMatch(orderItem -> orderItem.getItem().getId() == menuItemId);
-    }
-
-    private boolean isTableUsedInReservations(int tableNumber) {
-        return reservations.stream()
-                .anyMatch(reservation -> reservation.getTable().getTableNumber() == tableNumber);
-    }
-
-    private boolean canLoadReservation(Reservation reservation) {
-        if (findReservationById(reservation.getReservationId()) != null) {
-            return false;
-        }
-        if (reservation.getStatus() == ReservationStatus.CANCELLED
-                || reservation.getStatus() == ReservationStatus.COMPLETED) {
-            return true;
-        }
-        return reservations.stream()
-                .filter(existing -> existing.getTable().getTableNumber() == reservation.getTable().getTableNumber())
-                .filter(existing -> existing.getStatus() != ReservationStatus.CANCELLED)
-                .filter(existing -> existing.getStatus() != ReservationStatus.COMPLETED)
-                .noneMatch(existing -> existing.overlapsWith(reservation.getStartDateTime(), reservation.getDuration()));
     }
 }
